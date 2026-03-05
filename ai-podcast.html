@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DropIn — AI Podcast</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0d0b0e;
+    --surface: #161318;
+    --card: #1e1a21;
+    --border: #2e2832;
+    --amber: #f5a623;
+    --amber-dim: #b87a1a;
+    --red: #e8473f;
+    --green: #4caf7d;
+    --text: #e8e2f0;
+    --muted: #7a7086;
+    --host-a: #f5a623;
+    --host-b: #7c6af0;
+    --user: #4caf7d;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  /* Ambient glow */
+  .ambient {
+    position: fixed;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.07;
+  }
+  .ambient-a { background: var(--amber); top: -200px; left: -200px; }
+  .ambient-b { background: #7c6af0; bottom: -200px; right: -200px; }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 24px 120px;
+  }
+
+  /* HEADER */
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 52px;
+    font-weight: 700;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, var(--amber) 0%, #f0c060 50%, var(--host-b) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+  }
+
+  .tagline {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 16px;
+    color: var(--muted);
+    margin-top: 8px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ON AIR indicator */
+  .on-air {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(232, 71, 63, 0.1);
+    border: 1px solid rgba(232, 71, 63, 0.3);
+    border-radius: 100px;
+    padding: 6px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    color: var(--red);
+    margin-top: 20px;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+  .on-air.visible { opacity: 1; }
+  .on-air-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--red);
+    animation: pulse-red 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-red {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  /* SETUP CARD */
+  .setup-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    margin-bottom: 24px;
+    animation: fadeUp 0.6s 0.1s ease both;
+  }
+
+  .setup-label {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .topic-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .topic-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 20px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .topic-input:focus { border-color: var(--amber); }
+  .topic-input::placeholder { color: #3a3540; }
+
+  .btn-start {
+    background: var(--amber);
+    color: #0d0b0e;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 28px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
+    white-space: nowrap;
+  }
+  .btn-start:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(245, 166, 35, 0.3); }
+  .btn-start:active { transform: translateY(0); }
+  .btn-start:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* HOSTS BAR */
+  .hosts-bar {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    animation: fadeUp 0.6s 0.2s ease both;
+  }
+
+  .host-card {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: border-color 0.3s;
+  }
+  .host-card.speaking-a { border-color: var(--host-a); box-shadow: 0 0 20px rgba(245, 166, 35, 0.12); }
+  .host-card.speaking-b { border-color: var(--host-b); box-shadow: 0 0 20px rgba(124, 106, 240, 0.12); }
+
+  .host-avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .host-avatar-a { background: rgba(245, 166, 35, 0.15); }
+  .host-avatar-b { background: rgba(124, 106, 240, 0.15); }
+
+  .speaking-ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    transition: border-color 0.3s;
+  }
+  .speaking-a .speaking-ring { border-color: var(--host-a); animation: spin-ring 2s linear infinite; }
+  .speaking-b .speaking-ring { border-color: var(--host-b); animation: spin-ring 2s linear infinite; }
+
+  @keyframes spin-ring {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .host-info { flex: 1; min-width: 0; }
+  .host-name { font-weight: 500; font-size: 14px; margin-bottom: 2px; }
+  .host-name-a { color: var(--host-a); }
+  .host-name-b { color: var(--host-b); }
+  .host-role { font-size: 12px; color: var(--muted); }
+
+  .waveform {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 24px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .waveform.active { opacity: 1; }
+  .wave-bar {
+    width: 3px;
+    border-radius: 2px;
+    background: var(--host-a);
+  }
+  .host-card:last-child .wave-bar { background: var(--host-b); }
+
+  /* CHAT FEED */
+  .chat-feed {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 24px;
+    min-height: 300px;
+    max-height: 420px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    scroll-behavior: smooth;
+    animation: fadeUp 0.6s 0.3s ease both;
+  }
+
+  .chat-feed::-webkit-scrollbar { width: 4px; }
+  .chat-feed::-webkit-scrollbar-track { background: transparent; }
+  .chat-feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 260px;
+    color: var(--muted);
+    text-align: center;
+    gap: 12px;
+  }
+  .empty-icon { font-size: 48px; opacity: 0.3; }
+  .empty-text { font-size: 14px; line-height: 1.6; }
+
+  .message {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    animation: slideIn 0.3s ease both;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .msg-avatar-a { background: rgba(245, 166, 35, 0.15); }
+  .msg-avatar-b { background: rgba(124, 106, 240, 0.15); }
+  .msg-avatar-user { background: rgba(76, 175, 125, 0.15); }
+
+  .msg-body { flex: 1; min-width: 0; }
+
+  .msg-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .msg-name {
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .msg-name-a { color: var(--host-a); }
+  .msg-name-b { color: var(--host-b); }
+  .msg-name-user { color: var(--user); }
+
+  .msg-time {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+  }
+
+  .msg-text {
+    font-size: 14px;
+    line-height: 1.65;
+    color: #ccc4d8;
+  }
+
+  .typing-indicator {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .typing-dots {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-radius: 12px;
+  }
+  .typing-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    animation: bounce 1.2s ease infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-5px); }
+  }
+
+  /* JUMP IN BAR */
+  .jump-in-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 24px;
+    animation: fadeUp 0.6s 0.4s ease both;
+  }
+
+  .btn-dropin {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 16px 36px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-dropin:hover {
+    border-color: var(--amber);
+    box-shadow: 0 0 24px rgba(245, 166, 35, 0.15);
+    transform: translateY(-1px);
+  }
+  .btn-dropin.recording {
+    background: rgba(232, 71, 63, 0.12);
+    border-color: var(--red);
+    box-shadow: 0 0 32px rgba(232, 71, 63, 0.2);
+    animation: pulse-mic 1.4s ease infinite;
+  }
+
+  @keyframes pulse-mic {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(232, 71, 63, 0.3); }
+    50% { box-shadow: 0 0 0 14px rgba(232, 71, 63, 0); }
+  }
+
+  .dropin-icon { font-size: 22px; }
+
+  .dropin-label {
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    color: var(--text);
+  }
+  .btn-dropin.recording .dropin-label { color: var(--red); }
+
+  .dropin-transcript {
+    font-size: 13px;
+    font-style: italic;
+    color: var(--muted);
+    min-height: 20px;
+    text-align: center;
+    max-width: 500px;
+  }
+
+  /* ANIMATIONS */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* STATUS BAR */
+  .status-bar {
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 16px;
+    height: 20px;
+    transition: color 0.3s;
+  }
+  .status-bar.active { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<div class="ambient ambient-a"></div>
+<div class="ambient ambient-b"></div>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">DropIn</div>
+    <div class="tagline">Your AI podcast. Jump in anytime.</div>
+    <div class="on-air" id="onAir">
+      <div class="on-air-dot"></div>
+      ON AIR
+    </div>
+  </header>
+
+  <!-- SETUP -->
+  <div class="setup-card" id="setupCard">
+    <div class="setup-label">What's the podcast about?</div>
+    <div class="topic-row">
+      <input class="topic-input" id="topicInput" placeholder="e.g. why dogs are secretly running society..." />
+      <button class="btn-start" id="btnStart" onclick="startPodcast()">Go Live →</button>
+    </div>
+  </div>
+
+  <!-- HOSTS -->
+  <div class="hosts-bar">
+    <div class="host-card" id="hostCardA">
+      <div class="host-avatar host-avatar-a">
+        🎙️
+        <div class="speaking-ring"></div>
+      </div>
+      <div class="host-info">
+        <div class="host-name host-name-a">Marcus</div>
+        <div class="host-role">The Skeptic</div>
+      </div>
+      <div class="waveform" id="waveA">
+        <div class="wave-bar" style="height:8px; animation: waveAnim 0.5s ease infinite alternate;"></div>
+        <div class="wave-bar" style="height:16px; animation: waveAnim 0.5s 0.1s ease infinite alternate;"></div>
+        <div class="wave-bar" style="height:12px; animation: waveAnim 0.5s 0.2s ease infinite alternate;"></div>
+        <div class="wave-bar" style="height:20px; animation: waveAnim 0.5s 0.15s ease infinite alternate;"></div>
+        <div class="wave-bar" style="height:10px; animation: waveAnim 0.5s 0.05s ease infinite alternate;"></div>
+      </div>
+    </div>
+    <div class="host-card" id="hostCardB">
+      <div class="host-avatar host-avatar-b">
+        🎧
+        <div class="speaking-ring"></div>
+      </div>
+      <div class="host-info">
+        <div class="host-name host-name-b">Priya</div>
+        <div class="host-role">The Enthusiast</div>
+      </div>
+      <div class="waveform" id="waveB">
+        <div class="wave-bar" style="height:10px; animation: waveAnim 0.6s ease infinite alternate;"></div>
+        <div class="wave-bar" style="height:18px; animation: waveAnim 0.6s 0.1s ease infinite alternate;"></div>
+        <div class="wave-bar" style="height:14px; animation: waveAnim 0.6s 0.2s ease infinite alternate;"></div>
+        <div class="wave-bar" style="height:22px; animation: waveAnim 0.6s 0.15s ease infinite alternate;"></div>
+        <div class="wave-bar" style="height:8px; animation: waveAnim 0.6s 0.05s ease infinite alternate;"></div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @keyframes waveAnim {
+      from { transform: scaleY(0.4); }
+      to { transform: scaleY(1.2); }
+    }
+  </style>
+
+  <!-- STATUS -->
+  <div class="status-bar" id="statusBar">waiting to go live...</div>
+
+  <!-- CHAT FEED -->
+  <div class="chat-feed" id="chatFeed">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">🎙️</div>
+      <div class="empty-text">Type a topic above and hit <strong>Go Live</strong>.<br/>Marcus and Priya will start talking — and you can jump in.</div>
+    </div>
+  </div>
+
+  <!-- JUMP IN BAR -->
+  <div class="jump-in-bar" id="jumpInBar">
+    <button class="btn-dropin" id="btnMic" onclick="toggleMic()">
+      <span class="dropin-icon" id="dropinIcon">🎤</span>
+      <span class="dropin-label" id="dropinLabel">Tap to Drop In</span>
+    </button>
+    <div class="dropin-transcript" id="dropinTranscript"></div>
+  </div>
+
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let apiKey = 'YOUR_API_KEY_HERE'; // 👈 paste your Anthropic key right here
+let topic = '';
+let conversationHistory = [];
+let isRunning = false;
+let isPaused = false;
+let currentTurn = 'A'; // A or B
+let utteranceQueue = [];
+let isSpeaking = false;
+let recognition = null;
+let isRecording = false;
+let autoMode = false;
+let autoTimer = null;
+
+// ─── SYSTEM PROMPT ───────────────────────────────────────────────────────────
+function buildSystemPrompt(topic) {
+  return `You are simulating a lively, entertaining podcast with TWO hosts:
+
+MARCUS — The Skeptic: dry wit, loves to poke holes, plays devil's advocate, occasionally self-deprecating, big on "okay but ACTUALLY though..." energy. Quick to roast a listener but always with warmth.
+
+PRIYA — The Enthusiast: infectiously excited, goes on tangents, connects random dots, loves a conspiracy angle, laughs easily, will absolutely hype up a listener before roasting them too.
+
+PODCAST TOPIC: "${topic}"
+
+RULES:
+1. Each response is ONE turn from ONE host. Format strictly as:
+   MARCUS: [what Marcus says]
+   OR
+   PRIYA: [what Priya says]
+
+2. Keep each turn to 2-4 sentences MAX. Punchy. Real podcast energy.
+3. React to what the other host just said — build on it, challenge it, riff on it.
+4. When a LISTENER jumps in, BOTH hosts should be shocked/delighted. The next host to speak reacts to the listener directly — maybe roasts them gently, maybe agrees hilariously, maybe starts a running bit about them.
+5. NO stage directions. NO asterisks. Just the dialogue.
+6. Sound like humans who are genuinely having fun, not AI reading a script.
+7. The podcast should feel like it's actually going somewhere — build arguments, have mini-debates, drop callbacks.`;
+}
+
+// ─── API CALL ─────────────────────────────────────────────────────────────────
+async function callClaude(messages) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 300,
+      system: buildSystemPrompt(topic),
+      messages: messages
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error?.message || 'API error');
+  }
+  const data = await res.json();
+  return data.content[0].text.trim();
+}
+
+// ─── SPEECH ───────────────────────────────────────────────────────────────────
+const voices = { A: null, B: null };
+
+function loadVoices() {
+  const all = speechSynthesis.getVoices();
+  if (!all.length) return;
+  // Pick two distinct voices
+  const male = all.find(v => /male|guy|man|daniel|david|james|mark|paul/i.test(v.name)) || all[0];
+  const female = all.find(v => v !== male && (/female|woman|girl|samantha|karen|victoria|alice|zira/i.test(v.name) || v.name.includes('Google UK English Female'))) || all[1] || all[0];
+  voices.A = male;
+  voices.B = female;
+}
+
+speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+function speakText(text, host) {
+  return new Promise((resolve) => {
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.voice = host === 'A' ? voices.A : voices.B;
+    utt.rate = host === 'A' ? 0.95 : 1.05;
+    utt.pitch = host === 'A' ? 0.85 : 1.1;
+    utt.volume = 1;
+    utt.onend = resolve;
+    utt.onerror = resolve;
+    speechSynthesis.speak(utt);
+    setHostSpeaking(host, true);
+    utt.onend = () => { setHostSpeaking(host, false); resolve(); };
+  });
+}
+
+function setHostSpeaking(host, active) {
+  const cardA = document.getElementById('hostCardA');
+  const cardB = document.getElementById('hostCardB');
+  const waveA = document.getElementById('waveA');
+  const waveB = document.getElementById('waveB');
+  cardA.className = 'host-card' + (active && host === 'A' ? ' speaking-a' : '');
+  cardB.className = 'host-card' + (active && host === 'B' ? ' speaking-b' : '');
+  waveA.className = 'waveform' + (active && host === 'A' ? ' active' : '');
+  waveB.className = 'waveform' + (active && host === 'B' ? ' active' : '');
+}
+
+// ─── UI HELPERS ───────────────────────────────────────────────────────────────
+function setStatus(msg, active = false) {
+  const bar = document.getElementById('statusBar');
+  bar.textContent = msg;
+  bar.className = 'status-bar' + (active ? ' active' : '');
+}
+
+function addMessage(speaker, text) {
+  const feed = document.getElementById('chatFeed');
+  const empty = document.getElementById('emptyState');
+  if (empty) empty.remove();
+
+  const isA = speaker === 'Marcus';
+  const isB = speaker === 'Priya';
+  const isUser = speaker === 'You';
+
+  const avatarClass = isA ? 'msg-avatar-a' : isB ? 'msg-avatar-b' : 'msg-avatar-user';
+  const nameClass = isA ? 'msg-name-a' : isB ? 'msg-name-b' : 'msg-name-user';
+  const emoji = isA ? '🎙️' : isB ? '🎧' : '👤';
+
+  const now = new Date();
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const div = document.createElement('div');
+  div.className = 'message';
+  div.innerHTML = `
+    <div class="msg-avatar ${avatarClass}">${emoji}</div>
+    <div class="msg-body">
+      <div class="msg-header">
+        <span class="msg-name ${nameClass}">${speaker}</span>
+        <span class="msg-time">${time}</span>
+      </div>
+      <div class="msg-text">${text}</div>
+    </div>
+  `;
+  feed.appendChild(div);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function showTyping(host) {
+  const feed = document.getElementById('chatFeed');
+  const empty = document.getElementById('emptyState');
+  if (empty) empty.remove();
+
+  const color = host === 'A' ? 'var(--host-a)' : 'var(--host-b)';
+  const div = document.createElement('div');
+  div.className = 'typing-indicator';
+  div.id = 'typingIndicator';
+  div.innerHTML = `
+    <div class="msg-avatar ${host === 'A' ? 'msg-avatar-a' : 'msg-avatar-b'}">${host === 'A' ? '🎙️' : '🎧'}</div>
+    <div class="typing-dots">
+      <div class="typing-dot" style="background:${color}"></div>
+      <div class="typing-dot" style="background:${color}"></div>
+      <div class="typing-dot" style="background:${color}"></div>
+    </div>
+  `;
+  feed.appendChild(div);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function removeTyping() {
+  const t = document.getElementById('typingIndicator');
+  if (t) t.remove();
+}
+
+// ─── PODCAST LOGIC ───────────────────────────────────────────────────────────
+async function startPodcast() {
+  topic = document.getElementById('topicInput').value.trim();
+  if (!topic) { alert('Please enter a podcast topic!'); return; }
+
+  document.getElementById('onAir').classList.add('visible');
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnStart').textContent = 'Live!';
+
+  isRunning = true;
+  autoMode = true;
+  conversationHistory = [];
+  await doHostTurn('A', null);
+}
+
+async function doHostTurn(host, userMessage) {
+  if (!isRunning) return;
+
+  const hostName = host === 'A' ? 'Marcus' : 'Priya';
+  const prompt = userMessage
+    ? `The listener just jumped into the podcast and said: "${userMessage}"\n\nNow it's ${hostName}'s turn to respond. React to the listener directly.`
+    : `It's ${hostName}'s turn to speak. Continue the podcast naturally.`;
+
+  setStatus(`${hostName} is thinking...`, true);
+  showTyping(host);
+
+  try {
+    conversationHistory.push({ role: 'user', content: prompt });
+    const raw = await callClaude(conversationHistory);
+    removeTyping();
+
+    // Parse the host's line
+    let line = raw;
+    const match = raw.match(/^(MARCUS|PRIYA):\s*([\s\S]+)/i);
+    if (match) line = match[2].trim();
+
+    conversationHistory.push({ role: 'assistant', content: raw });
+
+    addMessage(hostName, line);
+    setStatus(`${hostName} is speaking...`, true);
+    await speakText(line, host);
+    setStatus('', false);
+
+    // Schedule the other host automatically
+    if (autoMode && isRunning) {
+      const nextHost = host === 'A' ? 'B' : 'A';
+      autoTimer = setTimeout(() => doHostTurn(nextHost, null), 800);
+    }
+
+  } catch (err) {
+    removeTyping();
+    setStatus(`Error: ${err.message}`, false);
+    console.error(err);
+    // retry after a pause
+    if (autoMode && isRunning) {
+      autoTimer = setTimeout(() => doHostTurn(host, null), 3000);
+    }
+  }
+}
+
+// ─── USER JUMP IN ─────────────────────────────────────────────────────────────
+async function sendUserMessage(msg) {
+  if (!msg || !msg.trim()) return;
+  if (!isRunning) return;
+
+  document.getElementById('dropinTranscript').textContent = '';
+
+  addMessage('You', msg);
+
+  // Pick a random host to respond first
+  const responder = Math.random() > 0.5 ? 'A' : 'B';
+  await doHostTurn(responder, msg);
+
+  // Then the other host reacts
+  const other = responder === 'A' ? 'B' : 'A';
+  await doHostTurn(other, null);
+
+  // Resume auto
+  autoMode = true;
+  const next = other === 'A' ? 'B' : 'A';
+  autoTimer = setTimeout(() => doHostTurn(next, null), 800);
+}
+
+// ─── MIC / SPEECH RECOGNITION ────────────────────────────────────────────────
+function toggleMic() {
+  if (!isRunning) { alert('Start a podcast first!'); return; }
+
+  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+    alert('Speech recognition not supported. Please use Chrome.');
+    return;
+  }
+
+  if (isRecording) {
+    recognition?.stop();
+    return;
+  }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang = 'en-US';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+
+  recognition.onstart = () => {
+    isRecording = true;
+    clearTimeout(autoTimer);
+    autoMode = false;
+    speechSynthesis.cancel();
+    setHostSpeaking(null, false);
+    document.getElementById('btnMic').classList.add('recording');
+    document.getElementById('jumpInBar').classList.add('recording');
+    document.getElementById('dropinLabel').textContent = 'Listening... tap to stop';
+    document.getElementById('dropinTranscript').textContent = '';
+    setStatus('Listening to you...', true);
+  };
+
+  recognition.onresult = (e) => {
+    let interim = '';
+    let final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    document.getElementById('dropinTranscript').textContent = final || interim;
+  };
+
+  recognition.onend = () => {
+    isRecording = false;
+    document.getElementById('btnMic').classList.remove('recording');
+    document.getElementById('jumpInBar').classList.remove('recording');
+    document.getElementById('dropinLabel').textContent = 'Tap to Drop In';
+    setStatus('', false);
+
+    const said = document.getElementById('dropinTranscript').textContent.trim();
+    if (said) {
+      sendUserMessage(said);
+    } else {
+      document.getElementById('dropinTranscript').textContent = '';
+      autoMode = true;
+      doHostTurn('A', null);
+    }
+  };
+
+  recognition.onerror = (e) => {
+    isRecording = false;
+    document.getElementById('btnMic').classList.remove('recording');
+    document.getElementById('jumpInBar').classList.remove('recording');
+    document.getElementById('dropinLabel').textContent = 'Tap to Drop In';
+    document.getElementById('dropinTranscript').textContent = '';
+    setStatus('Mic error — try again', false);
+    autoMode = true;
+  };
+
+  recognition.start();
+}
+
+// ─── ENTER ON TOPIC ──────────────────────────────────────────────────────────
+document.getElementById('topicInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') startPodcast();
+});
+</script>
+</body>
+</html>
